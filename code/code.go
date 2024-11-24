@@ -27,6 +27,9 @@ const (
 	OpGreaterThan
 	OpMinus
 	OpBang
+	OpJumpNotTruthy
+	OpJump
+	OpNull
 )
 
 var definitions = map[Opcode]*Definition{
@@ -43,7 +46,11 @@ var definitions = map[Opcode]*Definition{
 	OpGreaterThan: {"OpGreaterThan", []int{}},
 	OpMinus: {"OpMinus", []int{}},
 	OpBang: {"OpBang", []int{}},
+	OpJumpNotTruthy: {"OpJumpNotTruthy", []int{2}},
+	OpJump: {"OpJump", []int{2}},
+	OpNull: {"OpNull", []int{}},
 }
+
 
 func (ins Instructions) String() string {
 	var out bytes.Buffer
