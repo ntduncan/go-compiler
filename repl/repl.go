@@ -5,17 +5,17 @@ import (
 	"fmt"
 	"io"
 
-	"ntduncan.com/go-compiler/evaluator"
+	"ntduncan.com/go-compiler/compiler"
 	"ntduncan.com/go-compiler/lexer"
-	"ntduncan.com/go-compiler/object"
 	"ntduncan.com/go-compiler/parser"
+	"ntduncan.com/go-compiler/vm"
 )
 
 const PROMPT = ">>"
 
 func Start(in io.Reader, out io.Writer) {
 	scanner := bufio.NewScanner(in)
-	env := object.NewEnvironment()
+	//env := object.NewEnvironment()
 
 	for {
 		fmt.Fprint(out, PROMPT)
@@ -34,13 +34,21 @@ func Start(in io.Reader, out io.Writer) {
 			continue
 		}
 
-		evaluated := evaluator.Eval(program, env)
-		if evaluated != nil {
-			io.WriteString(out, evaluated.Inspect())
-			io.WriteString(out, "\n")
-
+		comp := compiler.New()
+		err := comp.Compile(program)
+		if err != nil {
+			fmt.Fprintf(out, "Whoops! Compilation failed: \n %s\n", err)
 		}
 
+		machine := vm.New(comp.Bytecode())
+		err = machine.Run()
+		if err != nil {
+			fmt.Fprintf(out, "Whoops! Executing bytecode failed:\n %s\n", err)
+		}
+
+		lastPopped := machine.LastPoppedStackElem()
+		io.WriteString(out, lastPopped.Inspect())
+		io.WriteString(out, "\n")
 	}
 }
 
