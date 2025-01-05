@@ -13,7 +13,7 @@ type Compiler struct {
 	constants           []object.Object
 	lastInstruction     EmittedInstruction
 	previousInstruction EmittedInstruction
-	symbolTable *SymbolTable
+	symbolTable         *SymbolTable
 }
 
 type EmittedInstruction struct {
@@ -25,7 +25,7 @@ func New() *Compiler {
 	return &Compiler{
 		instructions: code.Instructions{},
 		constants:    []object.Object{},
-		symbolTable: NewSymbolTable(),
+		symbolTable:  NewSymbolTable(),
 	}
 }
 
@@ -59,7 +59,7 @@ func (c *Compiler) Compile(node ast.Node) error {
 
 		c.emit(code.OpPop)
 	case *ast.InfixExpression:
-		if node.Operator == "<"{
+		if node.Operator == "<" {
 			err := c.Compile(node.Right)
 			if err != nil {
 				return err
@@ -87,15 +87,15 @@ func (c *Compiler) Compile(node ast.Node) error {
 		switch node.Operator {
 		case "+":
 			c.emit(code.OpAdd)
-		case "-": 
+		case "-":
 			c.emit(code.OpSub)
-		case "*": 
+		case "*":
 			c.emit(code.OpMul)
 		case "/":
 			c.emit(code.OpDiv)
 		case ">":
 			c.emit(code.OpGreaterThan)
-			
+
 		case "==":
 			c.emit(code.OpEqual)
 		case "!=":
@@ -106,7 +106,7 @@ func (c *Compiler) Compile(node ast.Node) error {
 	case *ast.IntegerLiteral:
 		integer := &object.Integer{Value: node.Value}
 		c.emit(code.OpConstant, c.addConstant(integer))
-	case *ast.Boolean: 
+	case *ast.Boolean:
 		if node.Value {
 			c.emit(code.OpTrue)
 		} else {
@@ -134,7 +134,7 @@ func (c *Compiler) Compile(node ast.Node) error {
 
 		//Fake News
 		jumpNotTruthyPos := c.emit(code.OpJumpNotTruthy, 9999)
-		 
+
 		err = c.Compile(node.Consequence)
 		if err != nil {
 			return err
@@ -161,7 +161,7 @@ func (c *Compiler) Compile(node ast.Node) error {
 				c.removeLastPop()
 			}
 		}
-		
+
 		afterAlternativePos := len(c.instructions)
 		c.changeOperand(jumpPos, afterAlternativePos)
 
@@ -191,6 +191,15 @@ func (c *Compiler) Compile(node ast.Node) error {
 	case *ast.StringLiteral:
 		str := &object.String{Value: node.Value}
 		c.emit(code.OpConstant, c.addConstant(str))
+	case *ast.ArrayLiteral:
+		for _, el := range node.Elements {
+			err := c.Compile(el)
+			if err != nil {
+				return err
+			}
+		}
+
+		c.emit(code.OpArray, len(node.Elements))
 	}
 
 	return nil
