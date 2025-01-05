@@ -9,10 +9,11 @@ import (
 )
 
 const StackSize = 2048
+const GloblasSize = 65536
+
 var True = &object.Boolean{Value: true}
 var False = &object.Boolean{Value: false}
 var Null = &object.Null{}
-
 
 type VM struct {
 	constants    []object.Object
@@ -20,6 +21,8 @@ type VM struct {
 
 	stack []object.Object
 	sp    int //Always points to the next value (Top of stack is stack[sp-1])
+
+	globals []object.Object
 }
 
 func New(bytecode *compiler.Bytecode) *VM {
@@ -29,6 +32,8 @@ func New(bytecode *compiler.Bytecode) *VM {
 
 		stack: make([]object.Object, StackSize),
 		sp:    0,
+
+		globals: make([]object.Object, GloblasSize),
 	}
 }
 
@@ -84,7 +89,7 @@ func (vm *VM) Run() error {
 			if err != nil {
 				return err
 			}
-		case code.OpJump: 
+		case code.OpJump:
 			pos := int(code.ReadUint16(vm.instructions[ip+1:]))
 			ip = pos - 1
 		case code.OpJumpNotTruthy:
@@ -92,11 +97,24 @@ func (vm *VM) Run() error {
 			ip += 2
 
 			condition := vm.pop()
-			if !isTruthy(condition){
+			if !isTruthy(condition) {
 				ip = pos - 1
 			}
 		case code.OpNull:
 			err := vm.push(Null)
+			if err != nil {
+				return err
+			}
+		case code.OpSetGlobal:
+			globalIndex := code.ReadUint16(vm.instructions[ip+1:])
+			ip += 2
+
+			vm.globals[globalIndex] = vm.pop()
+		case code.OpGetGlobal:
+			globalIndex := code.ReadUint16(vm.instructions[ip+1:])
+			ip += 2
+
+			err := vm.push(vm.globals[globalIndex])
 			if err != nil {
 				return err
 			}
@@ -135,13 +153,18 @@ func (vm *VM) executeBinaryOperation(op code.Opcode) error {
 	leftType := left.Type()
 	rightType := right.Type()
 
-	if leftType == object.INTEGER_OBJ && rightType == object.INTEGER_OBJ {
+	switch {
+	case leftType == object.INTEGER_OBJ && rightType == object.INTEGER_OBJ:
 		return vm.executeBinaryIntegerOperation(op, left, right)
+	case leftType == object.STRING_OBJ && rightType == object.STRING_OBJ:
+		return vm.executeBinaryStringOperation(op, left, right)
+	default:
+		return fmt.Errorf("unsupported types for binary operation: %s %s",
+			leftType, rightType)
 	}
 
 	return fmt.Errorf("unsupported types for binary operation: %s %s", leftType, rightType)
 
-	
 }
 
 func (vm *VM) executeBinaryIntegerOperation(op code.Opcode, left, right object.Object) error {
@@ -168,7 +191,7 @@ func (vm *VM) executeBinaryIntegerOperation(op code.Opcode, left, right object.O
 
 func (vm *VM) executeComparison(op code.Opcode) error {
 	right := vm.pop()
-	left  := vm.pop()
+	left := vm.pop()
 
 	if left.Type() == object.INTEGER_OBJ && right.Type() == object.INTEGER_OBJ {
 		return vm.executeIntegerComparison(op, left, right)
@@ -179,7 +202,7 @@ func (vm *VM) executeComparison(op code.Opcode) error {
 		return vm.push(nativeBoolToBooleanObject(right == left))
 	case code.OpNotEqual:
 		return vm.push(nativeBoolToBooleanObject(right != left))
-		default:
+	default:
 		return fmt.Errorf("unknown operator: %d (%s %s)", op, left.Type(), right.Type())
 	}
 
@@ -189,7 +212,7 @@ func (vm *VM) executeIntegerComparison(op code.Opcode, left, right object.Object
 	leftValue := left.(*object.Integer).Value
 	rightValue := right.(*object.Integer).Value
 
-	switch op{
+	switch op {
 	case code.OpEqual:
 		return vm.push(nativeBoolToBooleanObject(rightValue == leftValue))
 	case code.OpNotEqual:
@@ -245,4 +268,25 @@ func isTruthy(obj object.Object) bool {
 	default:
 		return true
 	}
+}
+
+func NewWithGloblasStore(bytecode *compiler.Bytecode, s []object.Object) *VM {
+	vm := New(bytecode)
+	vm.globals = s
+	return vm
+}
+
+func (vm *VM) executeBinaryStringOperation(
+	op code.Opcode,
+	left, right object.Object,
+) error {
+	if op != code.OpAdd {
+		return fmt.Errorf("unknown string operator: %d", op)
+	}
+
+	leftValue := left.(*object.String).Value
+	rightValue := right.(*object.String).Value
+
+	return vm.push(&object.String{Value: leftValue + rightValue})
+
 }
